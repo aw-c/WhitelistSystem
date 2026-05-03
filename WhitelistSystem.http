@@ -1,0 +1,6 @@
+@WhitelistSystem_HostAddress = http://localhost:5191
+
+GET {{WhitelistSystem_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

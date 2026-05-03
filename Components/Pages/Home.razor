@@ -1,0 +1,120 @@
+@page "/"
+@rendermode InteractiveServer
+@using WhitelistSystem.Models
+@using WhitelistSystem.Services
+@inject SteamWhitelistService SteamWhitelistService
+
+<PageTitle>Steam Whitelist</PageTitle>
+
+<div class="page-wrap">
+    <h1>Steam Whitelist</h1>
+
+    <form class="add-form" @onsubmit="HandleSubmit" @onsubmit:preventDefault>
+        <input @bind="_steamIdInput" placeholder="SteamId (e.g. 76561198000000000)" />
+        <input @bind="_commentInput" placeholder="Comment (optional)" />
+        <button type="submit">Add</button>
+    </form>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <p class="msg">@_message</p>
+    }
+
+    <div class="toolbar">
+        <input class="filter-input" @bind="_filter" @bind:event="oninput" placeholder="Filter by SteamId or comment..." />
+        <span class="total-label">Total: @_allEntries.Count</span>
+    </div>
+
+    @{
+        var filtered = string.IsNullOrWhiteSpace(_filter)
+            ? _allEntries
+            : _allEntries
+                .Where(e => e.SteamId.Contains(_filter, StringComparison.OrdinalIgnoreCase)
+                         || (e.Comment ?? "").Contains(_filter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        var pageCount = (int)Math.Ceiling(filtered.Count / (double)PageSize);
+        if (_page > pageCount) _page = Math.Max(1, pageCount);
+        var pageRows = filtered.Skip((_page - 1) * PageSize).Take(PageSize).ToList();
+    }
+
+    <table>
+        <thead>
+            <tr>
+                <th>SteamId</th>
+                <th>Added At</th>
+                <th>Comment</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (pageRows.Count == 0)
+            {
+                <tr><td colspan="4" class="empty">No entries found.</td></tr>
+            }
+            @foreach (var entry in pageRows)
+            {
+                <tr>
+                    <td class="mono">@entry.SteamId</td>
+                    <td class="nowrap">@entry.AddedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@(entry.Comment ?? "—")</td>
+                    <td><button class="btn-del" @onclick="() => DeleteEntry(entry.SteamId)">Delete</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (pageCount > 1)
+    {
+        <div class="pager">
+            <button @onclick="() => SetPage(1)" disabled="@(_page == 1)">«</button>
+            <button @onclick="() => SetPage(_page - 1)" disabled="@(_page == 1)">‹</button>
+            @for (var i = Math.Max(1, _page - 2); i <= Math.Min(pageCount, _page + 2); i++)
+            {
+                var p = i;
+                <button @onclick="() => SetPage(p)" class="@(_page == p ? "active" : "")">@p</button>
+            }
+            <button @onclick="() => SetPage(_page + 1)" disabled="@(_page == pageCount)">›</button>
+            <button @onclick="() => SetPage(pageCount)" disabled="@(_page == pageCount)">»</button>
+            <span class="page-info">Page @_page of @pageCount</span>
+        </div>
+    }
+</div>
+
+@code {
+    private const int PageSize = 10;
+
+    private readonly List<SteamWhitelistEntry> _allEntries = [];
+    private string _steamIdInput = string.Empty;
+    private string _commentInput = string.Empty;
+    private string _filter = string.Empty;
+    private string? _message;
+    private int _page = 1;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task HandleSubmit()
+    {
+        var added = await SteamWhitelistService.AddAsync(_steamIdInput, _commentInput);
+        _message = added ? "SteamId added." : "SteamId already exists or invalid.";
+        _steamIdInput = string.Empty;
+        _commentInput = string.Empty;
+        await ReloadAsync();
+    }
+
+    private async Task DeleteEntry(string steamId)
+    {
+        var removed = await SteamWhitelistService.RemoveAsync(steamId);
+        _message = removed ? "SteamId removed." : "SteamId not found.";
+        await ReloadAsync();
+    }
+
+    private void SetPage(int p) => _page = p;
+
+    private async Task ReloadAsync()
+    {
+        var items = await SteamWhitelistService.GetAllAsync();
+        _allEntries.Clear();
+        _allEntries.AddRange(items);
+    }
+}
