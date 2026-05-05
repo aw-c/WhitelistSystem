@@ -115,6 +115,6 @@
     {
         var items = await SteamWhitelistService.GetAllAsync();
         _allEntries.Clear();
-        _allEntries.AddRange(items);
+        _allEntries.AddRange(items.OrderByDescending(e => e.AddedAt));
     }
 }
